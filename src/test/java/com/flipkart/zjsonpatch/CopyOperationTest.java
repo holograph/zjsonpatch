@@ -1,6 +1,5 @@
 package com.flipkart.zjsonpatch;
 
-import org.junit.Test;
 import org.junit.runners.Parameterized;
 
 import java.io.IOException;
@@ -12,9 +11,4 @@ public class CopyOperationTest extends AbstractTest {
     public static Collection<PatchTestCase> data() throws IOException {
         return PatchTestCase.load("copy");
     }
-
-//    @Test
-//    public static introduceCopyOperationWorks() /* TODO, obviously */ {
-//        Diff.generateDiff()
-//    }
 }

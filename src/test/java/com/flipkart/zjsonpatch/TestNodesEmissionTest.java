@@ -6,7 +6,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.util.EnumSet;
 
-import static org.junit.Assert.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
 import org.junit.Test;
 
 public class TestNodesEmissionTest {
@@ -40,6 +41,19 @@ public class TestNodesEmissionTest {
         JsonNode diff = JsonDiff.asJson(source, target, flags);
 
         JsonNode testNode = mapper.readTree("{\"op\":\"test\",\"path\":\"/key\",\"value\":\"original\"}");
+        assertEquals(2, diff.size());
+        assertEquals(testNode, diff.iterator().next());
+    }
+
+    @Test
+    public void testNodeEmittedBeforeCopyOperationToArrayPrefix() throws IOException {
+        JsonNode source =
+                mapper.readTree("{\"array\":[{\"value\":1},{\"value\":2},{\"value\":3}],\"all\":[{\"value\":1},{\"value\":2},{\"value\":3},{\"value\":4}]}");
+        JsonNode target =
+                mapper.readTree("{\"array\":[{\"value\":4},{\"value\":1},{\"value\":2},{\"value\":3}],\"all\":[{\"value\":1},{\"value\":2},{\"value\":3},{\"value\":4}]}");
+        JsonNode diff = JsonDiff.asJson(source, target, DiffFlags.defaultsWith(DiffFlags.EMIT_TEST_OPERATIONS));
+
+        JsonNode testNode = mapper.readTree("{\"op\":\"test\",\"path\":\"/all/3\",\"value\":{\"value\":4}}");
         assertEquals(2, diff.size());
         assertEquals(testNode, diff.iterator().next());
     }
