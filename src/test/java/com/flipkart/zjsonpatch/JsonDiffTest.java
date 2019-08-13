@@ -25,10 +25,12 @@ import org.junit.Assert;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
-import java.io.IOException;
-import java.io.InputStream;
+import java.io.*;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.EnumSet;
 import java.util.Random;
+import java.util.function.Supplier;
 
 /**
  * Unit test
@@ -45,14 +47,32 @@ public class JsonDiffTest {
         jsonNode = (ArrayNode) objectMapper.readTree(testData);
     }
 
+    <T> T attempt(String message, Supplier<T> thunk) {
+        try {
+            return thunk.get();
+        } catch (Exception e) {
+            StringWriter sw = new StringWriter();
+            sw.append(message).append(":\n\n");
+            e.printStackTrace(new PrintWriter(sw, true));
+            Assert.fail(sw.toString());
+            throw e;    // Satisfy the compiler
+        }
+    }
+
     @Test
     public void testSampleJsonDiff() {
         for (int i = 0; i < jsonNode.size(); i++) {
             JsonNode first = jsonNode.get(i).get("first");
             JsonNode second = jsonNode.get(i).get("second");
-            JsonNode actualPatch = JsonDiff.asJson(first, second);
-            JsonNode secondPrime = JsonPatch.apply(actualPatch, first);
-            Assert.assertEquals("JSON Patch not symmetrical [index=" + i + ", first=" + first + "]", second, secondPrime);
+            JsonNode actualPatch = attempt(
+                    "Failed to create diff [index=" + i + ", first=" + first + ", second=" + second + "]",
+                    () -> JsonDiff.asJson(first, second, DiffFlags.defaultsWith(DiffFlags.EMIT_TEST_OPERATIONS))
+            );
+            JsonNode secondPrime = attempt(
+                    "Failed to apply diff [index=" + i + ", first=" + first + ", patch=" + actualPatch + "]",
+                    () -> JsonPatch.apply(actualPatch, first)
+            );
+            Assert.assertEquals("JSON Patch not symmetrical [index=" + i + ", first=" + first + "], calculated diff:\n" + actualPatch, second, secondPrime);
         }
     }
 
@@ -62,8 +82,14 @@ public class JsonDiffTest {
         for (int i = 0; i < 1000; i++) {
             JsonNode first = TestDataGenerator.generate(random.nextInt(10));
             JsonNode second = TestDataGenerator.generate(random.nextInt(10));
-            JsonNode actualPatch = JsonDiff.asJson(first, second);
-            JsonNode secondPrime = JsonPatch.apply(actualPatch, first);
+            JsonNode actualPatch = attempt(
+                    "Failed to create diff [index=" + i + ", first=" + first + ", second=" + second + "]",
+                    () -> JsonDiff.asJson(first, second, DiffFlags.defaultsWith(DiffFlags.EMIT_TEST_OPERATIONS))
+            );
+            JsonNode secondPrime = attempt(
+                    "Failed to apply diff [index=" + i + ", first=" + first + ", patch=" + actualPatch + "]",
+                    () -> JsonPatch.apply(actualPatch, first)
+            );
             Assert.assertEquals(second, secondPrime);
         }
     }
@@ -122,5 +148,39 @@ public class JsonDiffTest {
         JsonNode target = JsonPatch.apply(patch, source);
         JsonNode expected = objectMapper.readTree("{\"profiles\":{\"abc\":[],\"def\":[{\"hello\":\"world2\"},{\"hello\":\"world\"}]}}");
         Assert.assertEquals(target, expected);
+    }
+
+    @Test
+    public void normalizeMovesCollapsesRemoveThenAdd() throws IOException {
+        JsonDiff diff = new JsonDiff(DiffFlags.defaults(), Arrays.asList(
+                new Diff(Operation.REMOVE, JsonPointer.parse("/a"), objectMapper.readTree("1")),
+                new Diff(Operation.ADD, JsonPointer.parse("/b"), objectMapper.readTree("1"))
+        ));
+
+        diff.introduceMoveOperation();
+
+        Assert.assertEquals(
+                Collections.singletonList(
+                        new Diff(Operation.MOVE, JsonPointer.parse("/a"), JsonPointer.parse("/b"))
+                ),
+                diff.getDiffs());
+    }
+
+    @Test
+    public void normalizeMovesTransformsCorrespondingTestOps() throws IOException {
+        JsonDiff diff = new JsonDiff(DiffFlags.defaults(), Arrays.asList(
+                new Diff(Operation.TEST, JsonPointer.parse("/a"), objectMapper.readTree("1")),
+                new Diff(Operation.REMOVE, JsonPointer.parse("/a"), objectMapper.readTree("1")),
+                new Diff(Operation.ADD, JsonPointer.parse("/b"), objectMapper.readTree("1"))
+        ));
+
+        diff.introduceMoveOperation();
+
+        Assert.assertEquals(
+                Arrays.asList(
+                    new Diff(Operation.TEST, JsonPointer.parse("/a"), objectMapper.readTree("1")),
+                    new Diff(Operation.MOVE, JsonPointer.parse("/a"), JsonPointer.parse("/b"))
+                ),
+                diff.getDiffs());
     }
 }

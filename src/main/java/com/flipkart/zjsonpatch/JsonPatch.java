@@ -46,7 +46,7 @@ public final class JsonPatch {
             return child;
     }
 
-    private static void process(JsonNode patch, JsonPatchProcessor processor, EnumSet<CompatibilityFlags> flags)
+    static void process(JsonNode patch, JsonPatchProcessor processor, EnumSet<CompatibilityFlags> flags)
             throws InvalidJsonPatchException {
 
         if (!patch.isArray())

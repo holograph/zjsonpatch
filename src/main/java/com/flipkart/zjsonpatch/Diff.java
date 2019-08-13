@@ -78,4 +78,39 @@ class Diff {
     public JsonNode getSrcValue(){
         return srcValue;
     }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+
+        Diff diff = (Diff) o;
+
+        if (operation != diff.operation) return false;
+        if (!path.equals(diff.path)) return false;
+        if (value != null ? !value.equals(diff.value) : diff.value != null) return false;
+        if (toPath != null ? !toPath.equals(diff.toPath) : diff.toPath != null) return false;
+        return srcValue != null ? srcValue.equals(diff.srcValue) : diff.srcValue == null;
+    }
+
+    @Override
+    public int hashCode() {
+        int result = operation.hashCode();
+        result = 31 * result + path.hashCode();
+        result = 31 * result + (value != null ? value.hashCode() : 0);
+        result = 31 * result + (toPath != null ? toPath.hashCode() : 0);
+        result = 31 * result + (srcValue != null ? srcValue.hashCode() : 0);
+        return result;
+    }
+
+    @Override
+    public String toString() {
+        return "Diff{" +
+                "operation=" + operation +
+                ", path=" + path +
+                ", value=" + value +
+                ", toPath=" + toPath +
+                ", srcValue=" + srcValue +
+                '}';
+    }
 }
