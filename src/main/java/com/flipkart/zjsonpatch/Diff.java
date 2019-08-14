@@ -36,12 +36,12 @@ class Diff {
         this.srcValue = null;
     }
 
-    Diff(Operation operation, JsonPointer fromPath, JsonPointer toPath) {
+    Diff(Operation operation, JsonPointer fromPath, JsonNode srcValue, JsonPointer toPath) {
         this.operation = operation;
         this.path = fromPath;
         this.toPath = toPath;
         this.value = null;
-        this.srcValue = null;
+        this.srcValue = srcValue;
     }
     
     Diff(Operation operation, JsonPointer path, JsonNode srcValue, JsonNode value) {
@@ -61,14 +61,6 @@ class Diff {
 
     public JsonNode getValue() {
         return value;
-    }
-
-    public static Diff generateDiff(Operation replace, JsonPointer path, JsonNode target) {
-        return new Diff(replace, path, target);
-    }
-    
-    public static Diff generateDiff(Operation replace, JsonPointer path, JsonNode source, JsonNode target) {
-        return new Diff(replace, path, source, target);
     }
 
     JsonPointer getToPath() {

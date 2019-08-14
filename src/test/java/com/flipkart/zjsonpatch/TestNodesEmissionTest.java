@@ -14,12 +14,7 @@ public class TestNodesEmissionTest {
 
     private static ObjectMapper mapper = new ObjectMapper();
 
-    private static EnumSet<DiffFlags> flags;
-
-    static {
-        flags = DiffFlags.defaults();
-        flags.add(DiffFlags.EMIT_TEST_OPERATIONS);
-    }
+    private static EnumSet<DiffFlags> flags = DiffFlags.defaultsWith(DiffFlags.EMIT_TEST_OPERATIONS);
 
     @Test
     public void testNodeEmittedBeforeReplaceOperation() throws IOException {

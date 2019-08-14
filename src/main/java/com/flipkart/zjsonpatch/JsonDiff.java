@@ -66,6 +66,10 @@ public final class JsonDiff {
     }
 
     public static JsonNode asJson(final JsonNode source, final JsonNode target, EnumSet<DiffFlags> flags) {
+        return create(source, target, flags).getJsonNodes();
+    }
+
+    static JsonDiff create(final JsonNode source, final JsonNode target, EnumSet<DiffFlags> flags) {
         JsonDiff diff = new JsonDiff(flags, null);
 
         if (!flags.contains(DiffFlags.OMIT_COPY_OPERATION))
@@ -78,7 +82,7 @@ public final class JsonDiff {
             // Merging remove & add to move operation
             diff.introduceMoveOperation();
 
-        return diff.getJsonNodes();
+        return diff;
     }
 
     private JsonPointer validSourceFor(JsonNode value) {
@@ -149,26 +153,17 @@ public final class JsonDiff {
                         Operation.ADD == diff2.getOperation()) {
 
                     JsonPointer relativePath = computeRelativePath(diff2.getPath(), i + 1, j - 1, diffs);
-                    diffs.remove(j);
-                    diffs.set(i, new Diff(Operation.MOVE, diff1.getPath(), relativePath));
-
+                    moveDiff = new Diff(Operation.MOVE, diff1.getPath(), diff1.getValue(), relativePath);
                 } else if (Operation.ADD == diff1.getOperation() &&
                         Operation.REMOVE == diff2.getOperation()) {
 
                     JsonPointer relativePath = computeRelativePath(diff2.getPath(), i, j - 1, diffs); // diff1's add should also be considered
+                    moveDiff = new Diff(Operation.MOVE, relativePath, diff2.getValue(), diff1.getPath());
+                }
 
-                    Diff maybeTest = j > i + 1 ? diffs.get(j - 1) : null;
-                    if (maybeTest != null
-                            && maybeTest.getOperation() == Operation.TEST
-                            && maybeTest.getPath() == diff2.getPath()
-                            && maybeTest.getValue().equals(diff2.getValue())) {
-                        diffs.remove(j - 1);
-                        diffs.add(i, new Diff(Operation.TEST, relativePath, diff1.getValue()));
-                        i++;
-                    }
-
+                if (moveDiff != null) {
                     diffs.remove(j);
-                    diffs.set(i, new Diff(Operation.MOVE, relativePath, diff1.getPath()));
+                    diffs.set(i, moveDiff);
                 }
             }
         }
@@ -235,17 +230,51 @@ public final class JsonDiff {
     }
 
     ArrayNode getJsonNodes() {
-        JsonNodeFactory FACTORY = JsonNodeFactory.instance;
-        final ArrayNode patch = FACTORY.arrayNode();
+        final ArrayNode patch = JsonNodeFactory.instance.arrayNode();
         for (Diff diff : diffs) {
-            ObjectNode jsonNode = getJsonNode(FACTORY, diff, flags);
+            if (flags.contains(DiffFlags.EMIT_TEST_OPERATIONS)) {
+                ObjectNode testNode = emitTestNode(diff, flags);
+                if (testNode != null)
+                    patch.add(testNode);
+            }
+            ObjectNode jsonNode = renderJsonNode(diff, flags);
             patch.add(jsonNode);
         }
         return patch;
     }
 
-    private static ObjectNode getJsonNode(JsonNodeFactory FACTORY, Diff diff, EnumSet<DiffFlags> flags) {
-        ObjectNode jsonNode = FACTORY.objectNode();
+    private static ObjectNode emitTestNode(Diff diff, EnumSet<DiffFlags> flags) {
+        ObjectNode testNode;
+
+        switch (diff.getOperation()) {
+            case REPLACE:
+            case MOVE:
+            case COPY:
+                testNode = JsonNodeFactory.instance.objectNode();
+                testNode.put(Constants.OP, Operation.TEST.rfcName());
+                testNode.put(Constants.PATH, diff.getPath().toString());
+                testNode.set(Constants.VALUE, diff.getSrcValue());
+                return testNode;
+
+            case REMOVE:
+                testNode = JsonNodeFactory.instance.objectNode();
+                testNode.put(Constants.OP, Operation.TEST.rfcName());
+                testNode.put(Constants.PATH, diff.getPath().toString());
+                testNode.set(Constants.VALUE, diff.getValue());
+                return testNode;
+
+            case ADD:
+            case TEST:
+                return null;
+
+            default:
+                // Safety net
+                throw new IllegalArgumentException("Unknown operation specified:" + diff.getOperation());
+        }
+    }
+
+    private static ObjectNode renderJsonNode(Diff diff, EnumSet<DiffFlags> flags) {
+        ObjectNode jsonNode = JsonNodeFactory.instance.objectNode();
         jsonNode.put(Constants.OP, diff.getOperation().rfcName());
 
         switch (diff.getOperation()) {
@@ -292,15 +321,10 @@ public final class JsonDiff {
                 compareObjects(path, source, target);
             } else {
                 //can be replaced
-                if (flags.contains(DiffFlags.EMIT_TEST_OPERATIONS))
-                    diffs.add(new Diff(Operation.TEST, path, source));
                 // TODO potential optimization with COPY
-                diffs.add(Diff.generateDiff(Operation.REPLACE, path, source, target));
+                diffs.add(new Diff(Operation.REPLACE, path, source, target));
             }
         }
-    }
-
-    private void invalidateArrayParentValues(JsonNode source) throws JsonPointerEvaluationException {
     }
 
     private void compareArray(JsonPointer path, JsonNode source, JsonNode target) {
@@ -333,19 +357,15 @@ public final class JsonDiff {
                     JsonPointer currPath = path.append(pos);
                     JsonPointer sourcePath = validSourceFor(targetNode);
                     if (sourcePath != null) {
-                        if (flags.contains(DiffFlags.EMIT_TEST_OPERATIONS))
-                            diffs.add(new Diff(Operation.TEST, sourcePath, targetNode));
-                        diffs.add(new Diff(Operation.COPY, sourcePath, currPath));
+                        diffs.add(new Diff(Operation.COPY, sourcePath, targetNode, currPath));
                     } else
-                        diffs.add(Diff.generateDiff(Operation.ADD, currPath, targetNode));
+                        diffs.add(new Diff(Operation.ADD, currPath, targetNode));
                     pos++;
                     targetIdx++;
                 } else if (lcsNode.equals(targetNode)) { //targetNode node is same as lcs, but not src
                     //removal,
                     JsonPointer currPath = path.append(pos);
-                    if (flags.contains(DiffFlags.EMIT_TEST_OPERATIONS))
-                        diffs.add(new Diff(Operation.TEST, currPath, srcNode));
-                    diffs.add(Diff.generateDiff(Operation.REMOVE, currPath, srcNode));
+                    diffs.add(new Diff(Operation.REMOVE, currPath, srcNode));
                     srcIdx++;
                 } else {
                     JsonPointer currPath = path.append(pos);
@@ -377,9 +397,7 @@ public final class JsonDiff {
     private void removeRemaining(JsonPointer path, int pos, int srcIdx, int srcSize, JsonNode source) {
         while (srcIdx < srcSize) {
             JsonPointer currPath = path.append(pos);
-            if (flags.contains(DiffFlags.EMIT_TEST_OPERATIONS))
-                diffs.add(new Diff(Operation.TEST, currPath, source.get(srcIdx)));
-            diffs.add(Diff.generateDiff(Operation.REMOVE, currPath, source.get(srcIdx)));
+            diffs.add(new Diff(Operation.REMOVE, currPath, source.get(srcIdx)));
             srcIdx++;
         }
     }
@@ -388,7 +406,7 @@ public final class JsonDiff {
         while (targetIdx < targetSize) {
             JsonNode jsonNode = target.get(targetIdx);
             JsonPointer currPath = path.append(pos);
-            diffs.add(Diff.generateDiff(Operation.ADD, currPath, jsonNode.deepCopy()));
+            diffs.add(new Diff(Operation.ADD, currPath, jsonNode.deepCopy()));
             pos++;
             targetIdx++;
         }
@@ -403,11 +421,9 @@ public final class JsonDiff {
             JsonNode sourceValue = source.get(key);
             if (!target.has(key)) {
                 //remove case
-                if (flags.contains(DiffFlags.EMIT_TEST_OPERATIONS))
-                    diffs.add(new Diff(Operation.TEST, currPath, sourceValue));
                 if (!flags.contains(DiffFlags.OMIT_COPY_OPERATION))
                     removeFromValueMap(currPath, sourceValue);
-                diffs.add(Diff.generateDiff(Operation.REMOVE, currPath, sourceValue));
+                diffs.add(new Diff(Operation.REMOVE, currPath, sourceValue));
                 continue;
             }
             generateDiffs(currPath, sourceValue, target.get(key));
@@ -422,9 +438,7 @@ public final class JsonDiff {
                 JsonPointer fromPath = validSourceFor(targetValue);
                 if (fromPath != null) {
                     // copy case
-                    if (flags.contains(DiffFlags.EMIT_TEST_OPERATIONS))
-                        diffs.add(new Diff(Operation.TEST, fromPath, targetValue));
-                    diffs.add(new Diff(Operation.COPY, fromPath, currPath));
+                    diffs.add(new Diff(Operation.COPY, fromPath, targetValue, currPath));
                     populateValueMap(currPath, targetValue);
                 } else
                     diffs.add(new Diff(Operation.ADD, currPath, targetValue));

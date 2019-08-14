@@ -161,7 +161,7 @@ public class JsonDiffTest {
 
         Assert.assertEquals(
                 Collections.singletonList(
-                        new Diff(Operation.MOVE, JsonPointer.parse("/a"), JsonPointer.parse("/b"))
+                        new Diff(Operation.MOVE, JsonPointer.parse("/a"), objectMapper.readTree("1"), JsonPointer.parse("/b"))
                 ),
                 diff.getDiffs());
     }
@@ -179,7 +179,7 @@ public class JsonDiffTest {
         Assert.assertEquals(
                 Arrays.asList(
                     new Diff(Operation.TEST, JsonPointer.parse("/a"), objectMapper.readTree("1")),
-                    new Diff(Operation.MOVE, JsonPointer.parse("/a"), JsonPointer.parse("/b"))
+                    new Diff(Operation.MOVE, JsonPointer.parse("/a"), objectMapper.readTree("1"), JsonPointer.parse("/b"))
                 ),
                 diff.getDiffs());
     }
