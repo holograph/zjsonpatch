@@ -62,5 +62,9 @@ enum Operation {
         return this.rfcName;
     }
 
-
+    public boolean in(Operation... ops) {
+        for (Operation op: ops)
+            if (this == op) return true;
+        return false;
+    }
 }

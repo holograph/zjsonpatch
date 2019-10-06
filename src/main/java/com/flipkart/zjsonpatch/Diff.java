@@ -26,29 +26,34 @@ class Diff {
     private final Operation operation;
     private final JsonPointer path;
     private final JsonNode value;
-    private JsonPointer toPath; //only to be used in move operation
+    private final JsonPointer toPath;
     private final JsonNode srcValue; // only used in replace operation
 
-    Diff(Operation operation, JsonPointer path, JsonNode value) {
+    private Diff(Operation operation, JsonPointer path, JsonNode value, JsonPointer toPath, JsonNode srcValue) {
         this.operation = operation;
         this.path = path;
         this.value = value;
-        this.srcValue = null;
+        this.toPath = toPath;
+        this.srcValue = srcValue;
     }
 
-    Diff(Operation operation, JsonPointer fromPath, JsonNode srcValue, JsonPointer toPath) {
-        this.operation = operation;
-        this.path = fromPath;
-        this.toPath = toPath;
-        this.value = null;
-        this.srcValue = srcValue;
+    static Diff createAdd(JsonPointer path, JsonNode value) {
+        return new Diff(Operation.ADD, path, value, null, null);
     }
-    
-    Diff(Operation operation, JsonPointer path, JsonNode srcValue, JsonNode value) {
-        this.operation = operation;
-        this.path = path;
-        this.value = value;
-        this.srcValue = srcValue;
+    static Diff createCopy(JsonPointer fromPath, JsonPointer toPath, JsonNode value) {
+        return new Diff(Operation.COPY, fromPath, value, toPath, null);
+    }
+    static Diff createMove(JsonPointer fromPath, JsonPointer toPath, JsonNode value) {
+        return new Diff(Operation.MOVE, fromPath, value, toPath, null);
+    }
+    static Diff createTest(JsonPointer path, JsonNode value) {
+        return new Diff(Operation.TEST, path, value, null, null);
+    }
+    static Diff createReplace(JsonPointer path, JsonNode value, JsonNode sourceValue) {
+        return new Diff(Operation.REPLACE, path, value, null, sourceValue);
+    }
+    static Diff createRemove(JsonPointer path, JsonNode value) {
+        return new Diff(Operation.REMOVE, path, value, null, null);
     }
 
     public Operation getOperation() {

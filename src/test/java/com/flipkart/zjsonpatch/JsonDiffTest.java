@@ -153,15 +153,15 @@ public class JsonDiffTest {
     @Test
     public void normalizeMovesCollapsesRemoveThenAdd() throws IOException {
         JsonDiff diff = new JsonDiff(DiffFlags.defaults(), Arrays.asList(
-                new Diff(Operation.REMOVE, JsonPointer.parse("/a"), objectMapper.readTree("1")),
-                new Diff(Operation.ADD, JsonPointer.parse("/b"), objectMapper.readTree("1"))
+                Diff.createRemove(JsonPointer.parse("/a"), objectMapper.readTree("1")),
+                Diff.createAdd(JsonPointer.parse("/b"), objectMapper.readTree("1"))
         ));
 
         diff.introduceMoveOperation();
 
         Assert.assertEquals(
                 Collections.singletonList(
-                        new Diff(Operation.MOVE, JsonPointer.parse("/a"), objectMapper.readTree("1"), JsonPointer.parse("/b"))
+                        Diff.createMove(JsonPointer.parse("/a"), JsonPointer.parse("/b"), objectMapper.readTree("1"))
                 ),
                 diff.getDiffs());
     }
@@ -169,17 +169,17 @@ public class JsonDiffTest {
     @Test
     public void normalizeMovesTransformsCorrespondingTestOps() throws IOException {
         JsonDiff diff = new JsonDiff(DiffFlags.defaults(), Arrays.asList(
-                new Diff(Operation.TEST, JsonPointer.parse("/a"), objectMapper.readTree("1")),
-                new Diff(Operation.REMOVE, JsonPointer.parse("/a"), objectMapper.readTree("1")),
-                new Diff(Operation.ADD, JsonPointer.parse("/b"), objectMapper.readTree("1"))
+                Diff.createTest(JsonPointer.parse("/a"), objectMapper.readTree("1")),
+                Diff.createRemove(JsonPointer.parse("/a"), objectMapper.readTree("1")),
+                Diff.createAdd(JsonPointer.parse("/b"), objectMapper.readTree("1"))
         ));
 
         diff.introduceMoveOperation();
 
         Assert.assertEquals(
                 Arrays.asList(
-                    new Diff(Operation.TEST, JsonPointer.parse("/a"), objectMapper.readTree("1")),
-                    new Diff(Operation.MOVE, JsonPointer.parse("/a"), objectMapper.readTree("1"), JsonPointer.parse("/b"))
+                    Diff.createTest(JsonPointer.parse("/a"), objectMapper.readTree("1")),
+                    Diff.createMove(JsonPointer.parse("/a"), JsonPointer.parse("/b"), objectMapper.readTree("1"))
                 ),
                 diff.getDiffs());
     }
